@@ -211,6 +211,25 @@ induction n; simpl; intros.
   revert H0; apply real_morph; [|apply sort_closed|]; reflexivity.
 Qed.
 
+Lemma SN_T : forall e x y e' i j a b u v,
+  relocation_var e x y = Some (e' i j a b) ->
+  Some u = rintp a ->
+  Some v = rintp b ->
+  Some hyp = rintp_hyp e' ->
+  deriv hyp (eq_fotrm a b) ->
+  eq_typ e x y.
+
+
+(*Lemma SN_T : forall e x y,
+  (exists esi esj hyp a b,
+    x = (app_esub esi esj (intp_fotrm a)) /\
+    y = (app_esub esi esj (intp_fotrm b)) /\
+    env_incl e (intp_hyp hyp) /\
+    deriv hyp (eq_fotrm a b)) ->
+  eq_typ e x y.
+intros. destruct H as (esi, (esj, (hyp, (a, (b, (Hx, (Hy, (He, Heq)))))))).
+apply intp_sound in Heq. destruct Heq as (p, Heq). rewrite intp_eq_fml in Heq.*)
+
 Lemma SN_T : forall e x y,
   (exists n, deriv (const_hyp n) (eq_fotrm x y) /\ 
     env_incl e (intp_hyp (const_hyp n))) ->
