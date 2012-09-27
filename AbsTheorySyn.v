@@ -104,6 +104,16 @@ Definition fv_fml f := fv_fml_rec f 0.
 End FoLang.
 
 
+(*This model defines the axioms of the Theory*)
+Module Type TheoryAx (M : TheorySig).
+
+Include (FoLang M).
+
+(*Theory Axioms*)
+Parameter ax : list (option foformula) -> foformula -> Prop.
+
+End TheoryAx.
+
 
 (******************************************************************************************)
 (*This model defines the first-order theory with 3 parts :*)
@@ -111,18 +121,15 @@ End FoLang.
 (*2. The axioms*)
 (*3. Derivation rules*)
 (******************************************************************************************)
-Module Type ThoerySyn (M : TheorySig).
+Module TheorySyn (M : TheorySig) (MM : TheoryAx M).
 
-Import M.
-Include (FoLang M).
+Import M MM.
 
-Definition hyp_ok_trm (hyp:list (option foformula)) t := 
+Definition wf_trm (hyp:list (option foformula)) t := 
   forall n, In n (fv_trm t) -> nth_error hyp n = Some None.
 
 Definition wf_fml (hyp:list (option foformula)) f := 
   forall n, In n (fv_fml f) -> nth_error hyp n = Some None.
-
-Definition ax hyp f 
 
 Inductive deriv : list (option foformula) -> foformula -> Prop :=
 | hyp_judge : forall f hyp n, 
