@@ -13,16 +13,31 @@ Import ZF SN CCSN.
 
 
 
+(************************************************************************************)
+(*Abstract part of semantic*)
+(************************************************************************************)
 Module Type AbsSem.
 
 (*The sort of the theory*)
 Parameter sort : trm.
 Parameter sort_not_kind : sort <> kind.
 Parameter typ_sort : forall e, typ e sort kind.
-Parameter sort_not_empty : forall e, exists t, typ e t sort.
+Parameter sort_clsd : 
+  (forall n k, eq_trm (lift_rec n k sort) sort) /\
+  (forall t k, eq_trm (subst_rec t k sort) sort).
 
 Definition wf_clsd_env e := forall i j, val_ok e i j ->
   exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)).
+
+Definition EQ_trm x y :=
+  Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
+
+Parameter EQ_trm_elim : forall e x y t,
+  wf_clsd_env e ->
+  typ e x sort ->
+  typ e y sort ->
+  typ e t (EQ_trm x y) ->
+  eq_typ e x y.
 
 Parameter relocate_var : env -> trm -> trm -> option (env * (esub_i * (esub_j * (trm * trm)))).
 
@@ -44,10 +59,15 @@ Parameter ax_provable : ax.
 
 End AbsSem.
 
-
+(************************************************************************************)
+(*Full semantic with an abstract model*)
+(************************************************************************************)
 Module TheorySem (M : AbsSem).
 
 Import M.
+
+(*This sections describes logic connectors and quantifiers with properties*)
+Section FOLogic.
 
 (*False_symb for BF*)
 Definition False_symb := Prod prop (Ref 0).
@@ -480,6 +500,7 @@ rewrite H; clear H.
 apply typ_app with (V:=prop); [| |discriminate|discriminate]; trivial.
 Qed.
 
+(*Fall for fall*)
 Definition Fall A := Prod sort A.
 
 Lemma Fall_typ : forall e A,
@@ -493,16 +514,15 @@ Lemma Fall_intro : forall e t B,
   typ (sort::e) t B -> 
   typ e (Abs sort t) (Fall B).
 intros e t B HB Ht i j Hok'.
-generalize (sort_not_empty e); intros Hconst.
-destruct Hconst as (const, Hconst).
-apply red_typ with (1:=Hok') in Hconst; [destruct Hconst as (_, Hconst)|apply sort_not_kind].
-
-assert (val_ok (sort::e) (V.cons (int i const) i) (I.cons (tm j const) j)) as Hok.
- apply vcons_add_var; [trivial|apply Hconst|apply sort_not_kind].
+assert (exists x, [x, Sat.SatSet.daimon] \real int i sort).
+ apply typs_non_empty with (e:=e) (j:=j); [left; apply typ_sort|]; trivial.
+destruct H as (x, H).
+assert (val_ok (sort :: e) (V.cons x i) (I.cons Sat.SatSet.daimon j)).
+ apply vcons_add_var; [| |apply sort_not_kind]; trivial.
 
 generalize HB; intros HSB.
-apply red_typ with (1:=Hok) in HSB; [destruct HSB as (HSB, _)|discriminate].
-clear Hok Hconst; revert i j Hok'; fold (typ e (Abs sort t) (Fall B)).
+apply red_typ with (1:=H0) in HSB; [destruct HSB as (HSB, _)|discriminate].
+clear H H0; revert i j Hok'; fold (typ e (Abs sort t) (Fall B)).
 apply typ_abs; [left; apply typ_sort| |]; trivial.
 Qed.
   
@@ -512,22 +532,22 @@ Lemma Fall_elim : forall e t u B,
   typ e u sort ->
   typ e (App t u) (subst u B).
 red; intros e t u B HB Ht Hu i j Hok.
-generalize (sort_not_empty e); intros Hconst.
-destruct Hconst as (const, Hconst).
-apply red_typ with (1:=Hok) in Hconst; [destruct Hconst as (_, Hconst)|apply sort_not_kind].
 
-assert (val_ok (sort::e) (V.cons (int i const) i) (I.cons (tm j const) j)) as Hok'.
- apply vcons_add_var; [apply Hok|apply Hconst|apply sort_not_kind].
+assert (exists x, [x, Sat.SatSet.daimon] \real int i sort).
+ apply typs_non_empty with (e:=e) (j:=j); [left; apply typ_sort|]; trivial.
+destruct H as (x, H).
+assert (val_ok (sort :: e) (V.cons x i) (I.cons Sat.SatSet.daimon j)).
+ apply vcons_add_var; [| |apply sort_not_kind]; trivial.
 
 generalize HB; intros HSB.
-apply red_typ with (1:=Hok') in HSB; [destruct HSB as (HSB, _)|discriminate].
-clear Hok' Hconst; revert i j Hok; fold (typ e (App t u) (subst u B)).
+apply red_typ with (1:=H0) in HSB; [destruct HSB as (HSB, _)|discriminate].
+clear H H0; revert i j Hok; fold (typ e (App t u) (subst u B)).
 apply typ_app with (V:=sort); [| |apply sort_not_kind|]; trivial.
 Qed.
 
 (*Exst for exst*)
 Definition Exst A := Prod prop (
-  Prod (Prod sort (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) (Ref 1)).
+  Prod (Prod (lift 1 sort) (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) (Ref 1)).
 
 Lemma Exst_typ : forall e A,
   typ (sort::e) A prop ->
@@ -537,13 +557,15 @@ apply typ_prod; [right; trivial|left; apply typ_prop|].
 apply typ_prod; [right|right
   |setoid_replace prop with (lift 2 prop) using relation eq_trm at 2;
     [apply typ_var|simpl; split; red; reflexivity]]; trivial.
-apply typ_prod; [right; trivial|left; apply typ_sort|].
+apply typ_prod; [right; trivial
+  |left; setoid_replace kind with (lift 1 kind) using relation eq_trm;
+    [apply weakening; apply typ_sort|simpl; split; red; reflexivity]|].
 apply typ_prod; [right|right
   |setoid_replace prop with (lift 3 prop) using relation eq_trm at 2;
     [apply typ_var|simpl; split; red; reflexivity]]; trivial.
 rewrite subst0_lift.
- apply weakening_bind; [apply sort_not_kind| |discriminate| |trivial].
- red.
+setoid_replace prop with (lift_rec 1 1 prop) using relation eq_trm at 2;
+  [apply weakening_bind; trivial|simpl; split; red; reflexivity].
 Qed.
 
 Lemma Exst_intro : forall e A p a, 
@@ -552,24 +574,28 @@ Lemma Exst_intro : forall e A p a,
   typ e p (subst a A) ->
   exists t, typ e t (Exst A).
 intros e A p a HA Ha Hp. 
-exists (Abs prop (Abs (Prod sort (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) 
+exists (Abs prop (Abs (Prod (lift 1 sort) (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) 
   (App (App (Ref 0) (lift 2 a)) (lift 2 p)))).
 red; intros i j Hok.
-assert (val_ok (sort :: e) (V.cons ZERO i) (I.cons ZE j)).
- apply vcons_add_var; [trivial| |discriminate].
-  generalize (typ_0 Hok); intros typ0. apply typ0.
+assert (exists x, [x, Sat.SatSet.daimon] \real int i sort).
+ apply typs_non_empty with (e:=e) (j:=j); [left; apply typ_sort|]; trivial.
+destruct H as (x, H).
+assert (val_ok (sort :: e) (V.cons x i) (I.cons Sat.SatSet.daimon j)).
+ apply vcons_add_var; [| |apply sort_not_kind]; trivial.
 
 generalize HA; intros HSA.
-apply red_typ with (1:=H) in HSA; [destruct HSA as (HSA, _)|discriminate].
-clear H; revert i j Hok;
-fold (typ e (Abs prop (Abs (Prod sort (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) 
+apply red_typ with (1:=H0) in HSA; [destruct HSA as (HSA, _)|discriminate].
+clear H H0; revert i j Hok;
+fold (typ e (Abs prop (Abs (Prod (lift 1 sort) (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2))) 
   (App (App (Ref 0) (lift 2 a)) (lift 2 p)))) (Exst A)).
 apply typ_abs; [left; apply typ_prop| |discriminate].
 apply typ_abs; [right| |discriminate].
- apply typ_prod; [right; trivial|left; apply typ_N|].
-  apply typ_prod; [right; trivial|right|].
-   rewrite subst0_lift; apply weakening_bind; [discriminate| |discriminate| |trivial];
-     red; simpl; reflexivity.
+ apply typ_prod; [right; trivial
+   |left; setoid_replace kind with (lift 1 kind) using relation eq_trm;
+     [apply weakening; apply typ_sort|simpl; split; red; reflexivity]|].
+  apply typ_prod; [right; trivial|right; rewrite subst0_lift|].
+   setoid_replace prop with (lift_rec 1 1 prop) using relation eq_trm at 2;
+     [apply weakening_bind; trivial|simpl; split; red; reflexivity].
 
    setoid_replace prop with (lift 3 prop) using relation eq_trm at 2;
      [apply typ_var; trivial|simpl; split; red; reflexivity].
@@ -596,19 +622,19 @@ apply typ_abs; [right| |discriminate].
      destruct A; simpl; trivial.
 
    rewrite H; clear H.
-   apply typ_app with (V:=(lift 2 sort)); [| |discriminate|discriminate].
+   apply typ_app with (V:=(lift 2 sort)); [| | |discriminate].
     do 2 rewrite split_lift with (n:=1). do 2 apply weakening; trivial.
 
-    setoid_replace (lift 2 sort) with (lift 1 sort) using relation eq_trm;
-      [|simpl; split; red; reflexivity].
     assert (eq_trm (Prod (subst (Ref 0) (lift_rec 3 1 A)) (Ref 3))
       (lift_rec 1 1 (Prod (subst (Ref 0) (lift_rec 2 1 A)) (Ref 2)))).
      rewrite red_lift_prod. rewrite eq_trm_lift_ref_fv by omega.
      apply Prod_morph; [|simpl plus; reflexivity].
       do 2 rewrite subst0_lift. rewrite lift_rec_acc; [simpl; reflexivity|omega].
 
-    rewrite H; clear H. 
-    unfold lift. rewrite <- red_lift_prod. apply typ_var; trivial.
+    rewrite H; clear H. rewrite split_lift with (n:=1).
+    unfold lift at 2. rewrite <- red_lift_prod. apply typ_var; trivial.
+
+    case_eq sort; intros; [discriminate|apply sort_not_kind in H; contradiction].
 Qed.
           
 Lemma Exst_elim : forall e t1 t2 A C, 
@@ -624,20 +650,21 @@ generalize HC; intros HSC.
 apply red_typ with (1:=Hok) in HSC; [destruct HSC as (HSC, _)|discriminate].
 revert i j Hok; fold (typ e (App (App t1 C) (Abs sort (Abs A t2))) C).
 apply typ_abs in Ht2; [|right|destruct C; [discriminate|]]; trivial.
-apply typ_abs in Ht2; [|left; apply typ_N|discriminate].
+apply typ_abs in Ht2; [|left; apply typ_sort|discriminate].
 
 assert (eq_trm C (subst (Abs sort (Abs A t2)) (lift 1 C))).
  unfold subst; rewrite subst_lift_lt; [rewrite lift0; reflexivity|omega].
 
 rewrite H at 2; clear H.
-apply typ_app with (V:=(Prod sort (Prod A (lift 2 C)))); 
+apply typ_app with (V:=(Prod sort (Prod A (lift 2 C))));
   [|unfold Exst in Ht1|discriminate|destruct C; [discriminate|]]; trivial.
 assert (eq_trm (Prod (Prod sort (Prod A (lift 2 C))) (lift 1 C))
-  (subst C (Prod (Prod sort (Prod (subst (Ref 0) (lift_rec 2 1 A)) ((Ref 2)))) (Ref 1)))).
+  (subst C (Prod (Prod (lift 1 sort) (Prod (subst (Ref 0) (lift_rec 2 1 A)) ((Ref 2)))) (Ref 1)))).
  unfold subst. do 3 rewrite red_sigma_prod. 
  rewrite (subst0_lift A 1). do 2 (rewrite red_sigma_var_eq; [|trivial]).
+ rewrite subst_lift_lt; [rewrite lift0|omega].
  apply Prod_morph; [|reflexivity].
-  apply Prod_morph; [simpl; split; red; reflexivity|].
+  apply Prod_morph; [reflexivity|].
    apply Prod_morph; [|reflexivity].
     apply eq_trm_intro; [| |destruct A; simpl; trivial]; intros.
      rewrite int_subst_rec_eq. rewrite int_lift_rec_eq.
@@ -654,8 +681,39 @@ rewrite H; clear H.
 apply typ_app with (V:=prop); [| |discriminate|discriminate]; trivial.
 Qed.
 
-End FOTheory_Cst.
+(*Equation is encoded impredicatively*)
+Definition EQ_trm x y :=
+  Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
 
-(************************************************************************************)
-(*Specific part of a first-order theory, provide the signature of the theory*)
-(************************************************************************************)
+Lemma EQ_trm_typ : forall x y e, 
+  typ e x sort ->
+  typ e y sort ->
+  typ e (EQ_trm x y) prop.
+intros; apply typ_prod; [right; trivial|left|].
+ apply typ_prod; [left; trivial|left; apply typ_sort|apply typ_prop].
+
+ apply typ_prod; [right; trivial|right|].
+  setoid_replace prop with (subst (lift 1 x) prop) using relation eq_trm at 2;
+    [|simpl; split; red; reflexivity].
+  apply typ_app with (V:=(lift 1 sort)); 
+    [apply weakening; trivial| | |discriminate].
+   setoid_replace (Prod (lift 1 sort) prop) with (lift 1 (Prod sort prop)) using relation eq_trm;
+     [apply typ_var; trivial
+       |unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity].
+
+   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
+  
+  setoid_replace prop with (subst (lift 2 y) prop) using relation eq_trm at 2;
+    [|simpl; split; red; reflexivity].
+  apply typ_app with (V:=(lift 2 sort)); 
+    [do 2 rewrite split_lift with (n:=1); do 2 apply weakening; trivial| | |discriminate].
+   setoid_replace (Prod (lift 2 sort) prop) with (lift 2 (Prod sort prop)) using relation eq_trm;
+     [apply typ_var; trivial|].
+    unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity.
+
+   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
+Qed.
+
+End FOLogic.
+
+End TheorySem.

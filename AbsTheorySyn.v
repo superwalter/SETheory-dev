@@ -104,26 +104,26 @@ Definition fv_fml f := fv_fml_rec f 0.
 End FoLang.
 
 
-(*This model defines the axioms of the Theory*)
+
+(******************************************************************************************)
+(*Theory axioms defines how valid fomula origns*)
+(******************************************************************************************)
 Module Type TheoryAx (M : TheorySig).
 
-Include (FoLang M).
+Include FoLang(M).
 
 (*Theory Axioms*)
-Parameter ax : list (option foformula) -> foformula -> Prop.
+Parameter ax_syn : list (option foformula) -> foformula -> Prop.
 
 End TheoryAx.
 
 
 (******************************************************************************************)
-(*This model defines the first-order theory with 3 parts :*)
-(*1. The first-order language defined above*)
-(*2. The axioms*)
-(*3. Derivation rules*)
+(*Derivition rules defines how valid fomulas can be derived from the axioms*)
 (******************************************************************************************)
-Module TheorySyn (M : TheorySig) (MM : TheoryAx M).
+Module FoDeriv (M1 : TheorySig) (M2 : TheoryAx M1).
 
-Import M MM.
+Import M1 M2.
 
 Definition wf_trm (hyp:list (option foformula)) t := 
   forall n, In n (fv_trm t) -> nth_error hyp n = Some None.
@@ -136,7 +136,7 @@ Inductive deriv : list (option foformula) -> foformula -> Prop :=
   nth_error hyp n = Some (Some f) ->
   wf_fml hyp (lift_fml f (S n)) ->
   deriv hyp (lift_fml f (S n))
-| ax_intro : forall f hyp, ax hyp f -> deriv hyp f
+| ax_intro : forall f hyp, ax_syn hyp f -> deriv hyp f
 | true_intro : forall hyp, deriv hyp TF
 | false_elim : forall hyp f, deriv hyp BF -> wf_fml hyp f -> deriv hyp f
 | neg_intro : forall hyp f, deriv hyp (implf f BF) -> deriv hyp (neg f)
@@ -169,6 +169,22 @@ Inductive deriv : list (option foformula) -> foformula -> Prop :=
 | exst_elim : forall hyp f f1, 
   deriv hyp (exst f) -> 
   deriv (Some f::None::hyp) (lift_fml f1 2) -> deriv hyp f1.
+
+End FoDeriv.
+
+
+(******************************************************************************************)
+(*This model defines the first-order theory with 3 parts :*)
+(*1. The first-order language defined above*)
+(*2. The axioms*)
+(*3. Derivation rules*)
+(******************************************************************************************)
+Module Type TheorySyn (M : TheorySig) (MM : TheoryAx M).
+
+Include FoLang M.
+Include FoDeriv M MM.
+
+Import M MM.
 
 (*Any derivable formula should well typed*)
 Parameter deriv_well_typed : forall hyp f, deriv hyp f -> wf_fml hyp f.
