@@ -14,9 +14,9 @@ Import ZF SN CCSN.
 
 
 (************************************************************************************)
-(*Abstract part of semantic*)
+(*Abstract signature of semantic*)
 (************************************************************************************)
-Module Type AbsSem.
+Module Type AbsSemSig.
 
 (*The sort of the theory*)
 Parameter sort : trm.
@@ -39,35 +39,14 @@ Parameter EQ_trm_elim : forall e x y t,
   typ e t (EQ_trm x y) ->
   eq_typ e x y.
 
-Parameter relocate_var : env -> trm -> trm -> option (env * (esub_i * (esub_j * (trm * trm)))).
-
-Definition valid_relocation := forall e x y,
-  match relocate_var e x y with
-    | Some (e', (i, (j, (a, b)))) => 
-      x = (app_esub i j a) /\
-      y = (app_esub i j b) /\
-      wf_clsd_env e' /\
-      typ_esub e i j e'
-    | None => True
-  end.
-
-Parameter ex_valid_relocation : valid_relocation.
-
-(*Specific theory axioms. Required : they can be proved in the SN model*)
-Parameter ax : Prop.
-Parameter ax_provable : ax.
-
-End AbsSem.
+End AbsSemSig.
 
 (************************************************************************************)
-(*Full semantic with an abstract model*)
+(*This Module describes logic connectors and quantifiers with properties*)
 (************************************************************************************)
-Module TheorySem (M : AbsSem).
+Module SemLogic (M : AbsSemSig).
 
-Import M.
-
-(*This sections describes logic connectors and quantifiers with properties*)
-Section FOLogic.
+Export M.
 
 (*False_symb for BF*)
 Definition False_symb := Prod prop (Ref 0).
@@ -682,9 +661,6 @@ apply typ_app with (V:=prop); [| |discriminate|discriminate]; trivial.
 Qed.
 
 (*Equation is encoded impredicatively*)
-Definition EQ_trm x y :=
-  Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
-
 Lemma EQ_trm_typ : forall x y e, 
   typ e x sort ->
   typ e y sort ->
@@ -714,6 +690,37 @@ intros; apply typ_prod; [right; trivial|left|].
    case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
 Qed.
 
-End FOLogic.
+End SemLogic.
+
+
+(************************************************************************************************)
+(*This module represents axioms and prove them*)
+(************************************************************************************************)
+Module Type SemanticAx (M : AbsSemSig).
+
+Include SemLogic M.
+
+(*Specific theory axioms. Required : they can be proved in the SN model*)
+Parameter ax : Prop.
+Parameter ax_provable : ax.
+
+End SemanticAx.
+
+
+(************************************************************************************************)
+(*Full interpretation of the theory*)
+(************************************************************************************************)
+Module Type TheorySem.
+
+Declare Module sig : AbsSemSig.
+Export sig.
+
+Declare Module ax : SemanticAx sig.
+Export ax.
 
 End TheorySem.
+
+
+
+
+

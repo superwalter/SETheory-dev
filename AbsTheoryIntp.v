@@ -17,30 +17,29 @@ Import SN CCSN.
 (*Abstract interpretation of signature*)
 (************************************************************************************)
 
-Module Type SigIntp (M1 : TheorySig) (M2 : AbsSem).
+Module Type SigIntp (Msyn : TheorySyn).
 
-Import M1 M2.
+Import Msyn.
 
 (*Interpretation first-order term*)
 Parameter intp_fotrm : foterm -> trm.
 
 (*Interpretation is not kind*)
-Parameter intp_fotrm_not_kind : forall t, intp_fotrm t <> kind.
-
+Axiom intp_fotrm_not_kind : forall t, intp_fotrm t <> kind.
 
 (*Properties about lift and interpretation term*)
-Parameter lift_intp_lift_trm_rec : forall t n k, 
+Axiom lift_intp_lift_trm_rec : forall t n k, 
   eq_trm (lift_rec n k (intp_fotrm t)) 
          (intp_fotrm (lift_trm_rec t n k)).
-Parameter lift_intp_lift_trm : forall t n,
+Axiom lift_intp_lift_trm : forall t n,
   eq_trm (lift n (intp_fotrm t)) 
          (intp_fotrm (lift_trm t n)).
 
 (*Properties about substitution and interpretation term*)
-Parameter subst_intp_subst_trm_rec : forall t N k, 
+Axiom subst_intp_subst_trm_rec : forall t N k, 
   eq_trm (subst_rec (intp_fotrm N) k (intp_fotrm t)) 
          (intp_fotrm (subst_trm_rec t N k)).
-Parameter subst_intp_subst_trm : forall t N, 
+Axiom subst_intp_subst_trm : forall t N, 
   eq_trm (subst (intp_fotrm N) (intp_fotrm t)) 
          (intp_fotrm (subst_trm t N)).
 
@@ -50,12 +49,9 @@ End SigIntp.
 (************************************************************************************)
 (*Interpret first-order language and hypothesis*)
 (************************************************************************************)
-Module LangHypIntp (M1 : TheorySig) (M2 : AbsSem) (M3 : SigIntp M1 M2).
+Module LangHypIntp (Msyn : TheorySyn) (Msem : TheorySem) (MSI : SigIntp Msyn).
 
-Include FoLang M1.
-Include TheorySem M2.
-
-Import M1 M2 M3.
+Import Msyn Msem MSI.
 
 (*Interpretation of foformula*)
 Fixpoint intp_fofml f:=
@@ -193,7 +189,7 @@ unfold subst; intros; apply subst_intp_subst_fml_rec with (k:=0).
 Qed.
 
 (*Interpretation of the context*)
-Fixpoint intp_hyp (hyp : list (option foformula)) := 
+Fixpoint intp_hyp (hyp : HYP) := 
   match hyp with
   | nil => nil
   | h::hyp' => 
@@ -212,43 +208,21 @@ Qed.
 
 End LangHypIntp.
 
+(***********************************************************************************)
 (*Interpret axioms*)
-Module Type AxIntp (M1 : TheorySig) (M2 : TheoryAx M1) (M3 : AbsSem) (M4 : SigIntp M1 M3).
+(***********************************************************************************)
+Module Type AxIntp (Msyn : TheorySyn) (Msem : TheorySem) (MSI : SigIntp Msyn).
 
-Include LangHypIntp M1 M3 M4.
+Include LangHypIntp Msyn Msem MSI.
+Import Msyn Msem MSI.
 
-Import M1 M2 M3 M4.
+Axiom intp_fotrm_sort : forall hyp t,
+  wf_trm hyp t ->
+  typ (intp_hyp hyp) (intp_fotrm t) sort.
 
-(*Axioms in first-order theory is provable in the associated module*)
-Parameter intp_ax : forall (hyp : list (option foformula)) f, 
-  ax_syn hyp f -> 
-  exists t, typ (intp_hyp hyp) t (intp_fofml f).
-
-
-(*The interpretation of foterm is sort*)
-Lemma intp_fotrm_sort : forall hyp t,
-  hyp_ok_trm hyp t ->
-  typ (intp_hyp hyp) (intp_fotrm t) Nat.
-induction t; simpl intp_fotrm; intros.
- red in H; simpl in H.
- apply typ_common; [exact I|intros].
- replace (n-0) with n in H by omega.
- assert (n=n \/ False) by auto.
- specialize H with (1:=H1); clear H1.
- apply intp_hyp_nth_trm in H. apply H0 in H; clear H0.
- apply in_int_not_kind in H; [|discriminate].
- revert H; apply real_morph; [|simpl|]; reflexivity.
-
- apply typ_0.
-
- apply typ_S1; apply typ_0.
- 
- rewrite <- hyp_ok_add in H. destruct H as (H1, H2).
- apply typ_Add2; [apply IHt1|apply IHt2]; trivial.
-Qed.
-
+(*The interpretation of the foformula is prop*)
 Lemma intp_fofml_prop : forall f hyp,
-  hyp_ok_fml hyp f ->
+  wf_fml hyp f ->
   typ (intp_hyp hyp) (intp_fofml f) prop.
 induction f; simpl; intros.
  apply EQ_trm_typ; apply intp_fotrm_sort; red in H |- *; simpl in H |- *; intros; 
@@ -270,25 +244,30 @@ induction f; simpl; intros.
  apply Impl_typ; [apply IHf1|apply IHf2]; red in H |- *; simpl in H |- *; intros; 
    apply H; apply in_or_app; [left|right]; trivial.
 
- apply Fall_typ. replace (Nat::intp_hyp hyp) with (intp_hyp (None::hyp)) by (simpl; trivial).
+ apply Fall_typ. replace (sort::intp_hyp hyp) with (intp_hyp (None::hyp)) by (simpl; trivial).
  apply IHf. red in H |- *. intros. simpl in H.
  destruct n; simpl; [|apply H; apply in_S_fv_fml]; trivial.
 
- apply Exst_typ. replace (Nat::intp_hyp hyp) with (intp_hyp (None::hyp)) by (simpl; trivial).
+ apply Exst_typ. replace (sort::intp_hyp hyp) with (intp_hyp (None::hyp)) by (simpl; trivial).
  apply IHf. red in H |- *. intros; simpl in H.
  destruct n; simpl; [|apply H; apply in_S_fv_fml]; trivial.
 Qed.
 
+(*Axioms in first-order theory is provable in the associated module*)
+Parameter intp_ax : forall (hyp : HYP) f, 
+  ax_syn hyp f -> 
+  exists t, typ (intp_hyp hyp) t (intp_fofml f).
+
+End AxIntp.
 
 
-Parameter intp_fotrm_sort : forall hyp t,
-  hyp_ok_trm hyp t ->
-  typ (intp_hyp hyp) (intp_fotrm t) sort.
+(***********************************************************************************)
+(*Interpret Theory*)
+(***********************************************************************************)
+Module Type TheoryIntp (Msyn : TheorySyn) (Msem : TheorySem).
 
-(*The interpretation of the foformula is prop*)
-Parameter intp_fofml_prop : forall f hyp,
-  hyp_ok_fml hyp f ->
-  typ (intp_hyp hyp) (intp_fofml f) prop.
+Declare Module MSI : SigIntp Msyn.
 
+Declare Module MAI : AxIntp Msyn Msem MSI.
 
-End InterpTheory.
+End TheoryIntp.
