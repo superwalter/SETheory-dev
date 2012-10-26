@@ -20,24 +20,25 @@ Module Type AbsSemSig.
 
 (*The sort of the theory*)
 Parameter sort : trm.
-Parameter sort_not_kind : sort <> kind.
-Parameter typ_sort : forall e, typ e sort kind.
-Parameter sort_clsd : 
+Axiom sort_not_kind : sort <> kind.
+Axiom typ_sort : forall e, typ e sort kind.
+Axiom sort_clsd : 
   (forall n k, eq_trm (lift_rec n k sort) sort) /\
   (forall t k, eq_trm (subst_rec t k sort) sort).
 
 Definition wf_clsd_env e := forall i j, val_ok e i j ->
   exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)).
 
-Definition EQ_trm x y :=
-  Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
-
-Parameter EQ_trm_elim : forall e x y t,
+Axiom PredVary : forall e x y i j, 
   wf_clsd_env e ->
   typ e x sort ->
   typ e y sort ->
-  typ e t (EQ_trm x y) ->
-  eq_typ e x y.
+  val_ok e i j ->
+  (exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)) /\
+    (exists P, P <> kind /\ [int i P, tm j' P] \real int i (Prod sort prop) /\ 
+      exists u, [int i u, tm j' u] \real (app (int i P) (int i x)) /\
+        ((exists v, [int i v, tm j' v] \real (app (int i P) (int i y))) -> 
+          int i x == int i y))).
 
 End AbsSemSig.
 
@@ -47,6 +48,38 @@ End AbsSemSig.
 Module SemLogic (M : AbsSemSig).
 
 Export M.
+
+Definition EQ_trm x y :=
+  Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
+
+Lemma EQ_trm_elim : forall e x y t,
+  wf_clsd_env e ->
+  typ e x sort ->
+  typ e y sort ->
+  typ e t (EQ_trm x y) ->
+  eq_typ e x y.
+do 2 red; intros e x y t Hclsd Hx Hy Ht i j' Hok'.
+generalize PredVary; intro HP. specialize HP with (1:=Hclsd) (2:=Hx) (3:=Hy) (4:=Hok').
+destruct HP as (j, (Hok, (_, HP))).
+destruct HP as (P, HP).
+destruct HP as (HSP, HP).
+destruct HP as (HP, Hxy).
+destruct Hxy as (u, (Hv, Hxy)).
+apply red_typ with (1:=Hok) in Ht; [|discriminate].
+destruct Ht as (_, Ht).
+
+apply Hxy; clear Hxy Hclsd e Hx Hy j' Hok' Hok.
+unfold EQ_trm in Ht. simpl int in Ht.
+apply SN.prod_elim with (x:=int i P) (u:=tm j P) in Ht; [
+  |do 2 red; intros; apply prod_ext; [|do 2 red; intros; rewrite H2]; rewrite H0; reflexivity|trivial].
+apply SN.prod_elim with (x:=int i u) (u:=tm j u) in Ht.
+ exists (App (App t P) u). revert Ht; apply real_morph; simpl; [reflexivity| |reflexivity].
+  rewrite split_lift. do 2 rewrite int_cons_lift_eq; reflexivity.
+
+ do 2 red; intros. rewrite H0. reflexivity.
+
+ revert Hv; apply real_morph; [|rewrite int_cons_lift_eq|]; reflexivity.
+Qed.
 
 (*False_symb for BF*)
 Definition False_symb := Prod prop (Ref 0).
