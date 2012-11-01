@@ -111,6 +111,11 @@ ZFsum.v
 ZFtheory.v
 ZFwf.v
 basic.v
+InstInterp.v
+InstSem.v
+InstSyn.v
+ModelTheory.v
+SN_Theory.v
 broken/
 template/
 
