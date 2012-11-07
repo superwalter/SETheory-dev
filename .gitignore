@@ -10,8 +10,6 @@
 
 #Bruno's files#
 #########################
-CCTnat.v
-CCUT.v
 Can.v
 Choice.v
 Conv.v
@@ -25,8 +23,6 @@ EnsLogic.v
 EnsUniv.v
 Env.v
 EnvECC.v
-Esub.v
-FOTheory.v
 GenModel.v
 GenModelSN.v
 GenModelSyntax.v
@@ -58,7 +54,6 @@ StrengthenECC.v
 Sublogic.v
 Term.v
 TermECC.v
-TheoryInTerm.v
 TypeECC.v
 TypeJudge.v
 TypeJudgeECC.v
@@ -108,14 +103,8 @@ ZFstrictpos.v
 ZFstrictpos1.v
 ZFstrictpos_prop.v
 ZFsum.v
-ZFtheory.v
 ZFwf.v
 basic.v
-InstInterp.v
-InstSem.v
-InstSyn.v
-ModelTheory.v
-SN_Theory.v
 broken/
 template/
 
