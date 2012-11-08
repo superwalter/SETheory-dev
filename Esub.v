@@ -67,14 +67,14 @@ destruct t; [destruct i; simpl; apply itm_subst0|]; trivial.
 Defined.
 
 Definition id_sub : esub.
-exists (fun f => f) (fun f => (fun _ => Lc.K)).
+exists (fun f => f) (fun f => f).
 do 2 red; trivial.
 
 do 4 red; trivial.
 
-do 2 red; trivial.
+reflexivity.
 
-do 2 red; trivial.
+reflexivity.
 Defined.
 
 Definition sub_cons : trm -> esub -> esub.
