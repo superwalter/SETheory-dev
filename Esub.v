@@ -93,30 +93,30 @@ do 2 red; intros. destruct es as (f, Hmrphf, g, Hmrphg, Hl, Hs); simpl. rewrite 
 destruct t; [destruct i; simpl; rewrite itm_subst0|]; destruct a; simpl; trivial.
 Defined.
 
-Definition typ_esub env1 es_i es_j env2 := 
+Definition typ_esub env1 es env2 := 
   forall i j, val_ok env1 i j -> 
-    val_ok env2 (esub_conv_i es_i i) (esub_conv_j es_j j).
+    val_ok env2 (esub_conv_i es i) (esub_conv_j es j).
 
-Lemma esub_typ_id : forall env, typ_esub env id_sub_i id_sub_j nil.
+Lemma esub_typ_id : forall env, typ_esub env id_sub nil.
 do 2 red; intros. destruct n; simpl in H0; discriminate.
 Qed.
 
-Lemma esub_typ_cons : forall env1 env2 s s' t A,
+Lemma esub_typ_cons : forall env1 env2 es t A,
   A <> kind ->
-  typ_esub env1 s s' env2 ->
-  typ env1 t (app_esub s s' A) ->
-  typ_esub env1 (sub_cons_i t s) (sub_cons_j t s') (A::env2).
+  typ_esub env1 es env2 ->
+  typ env1 t (app_esub es A) ->
+  typ_esub env1 (sub_cons t es) (A::env2).
 red; intros; simpl.
 apply vcons_add_var; [apply H0| |]; trivial.
  apply red_typ with (1:=H2) in H1; [|discriminate].
  destruct H1 as (_, H1). simpl int in H1; trivial.
 Qed.
 
-Lemma explicit_sub_typ : forall env1 env2 s s' t A, 
+Lemma explicit_sub_typ : forall env1 env2 es t A, 
   A <> kind ->
-  typ_esub env1 s s' env2 ->
+  typ_esub env1 es env2 ->
   typ env2 t A -> 
-  typ env1 (app_esub s s' t) (app_esub s s' A).
+  typ env1 (app_esub es t) (app_esub es A).
 red; intros.
 apply H0 in H2.
 apply H1 in H2.
@@ -125,12 +125,12 @@ apply in_int_intro; [|discriminate|discriminate].
 simpl int; simpl tm in H2 |- *; trivial.
 Qed.
 
-Lemma explicit_sub_eq_typ : forall env1 env2 s s' x y,
+Lemma explicit_sub_eq_typ : forall env1 env2 es x y,
   x <> kind ->
   y <> kind ->
-  typ_esub env1 s s' env2 ->
+  typ_esub env1 es env2 ->
   eq_typ env2 x y ->
-  eq_typ env1 (app_esub s s' x) (app_esub s s' y).
+  eq_typ env1 (app_esub es x) (app_esub es y).
 red; intros. 
 apply H1 in H3. 
 apply H2 in H3; simpl; trivial.

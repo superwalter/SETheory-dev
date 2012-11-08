@@ -140,15 +140,15 @@ induction 1; simpl.
 Qed.
 
 Lemma SN_T : forall e x y,
-  (exists hyp a b i j, 
-    x = app_esub i j (intp_fotrm a) /\
-    y = app_esub i j (intp_fotrm b) /\
+  (exists hyp a b es, 
+    x = app_esub es (intp_fotrm a) /\
+    y = app_esub es (intp_fotrm b) /\
     wf_clsd_env (intp_hyp hyp) /\
-    typ_esub e i j (intp_hyp hyp) /\
+    typ_esub e es (intp_hyp hyp) /\
     deriv hyp (eq_fotrm a b)) ->
   eq_typ e x y.
 intros e x y Hyp.
-destruct Hyp as (hyp, (a, (b, (i, (j, (Hx, (Hy, (Hclsd, (He, Hderiv))))))))).
+destruct Hyp as (hyp, (a, (b, (es, (Hx, (Hy, (Hclsd, (He, Hderiv)))))))).
 (*a and b are well typed in theory syntax*)
 specialize deriv_well_typed with (1:=Hderiv); intro Hwf.
 assert (wf_trm hyp a /\ wf_trm hyp b) as Hwfab.
