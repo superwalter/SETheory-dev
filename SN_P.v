@@ -122,3 +122,64 @@ Lemma SN_P : forall e x y,
     deriv hyp (eq_fotrm a b)) ->
   eq_typ e x y.
 Proof. apply SN_T. Qed.
+
+Definition EQ_refl x := 
+  Abs (Prod sort prop) (Abs (App (Ref 0) (lift 1 x)) (Ref 0)).
+
+Lemma EQ_refl_prf : forall e x y t, 
+  valid_ctxt e ->
+  typ e x sort ->
+  typ e y sort ->
+  typ e t (EQ_trm x y) ->
+  typ e (EQ_refl x) (EQ_trm x y).
+intros e x y t ve Hx Hy Ht.
+apply EQ_trm_elim in Ht; [|apply valid_ctxt_wf_clsd| |]; trivial.
+apply typ_abs; [| |discriminate].
+ left. apply typ_prod; [left; trivial|left; apply typ_sort|apply typ_prop].
+
+ apply typ_abs; [| |discriminate].
+  right. setoid_replace prop with (subst (lift 1 x) prop) using relation eq_trm at 2; [|
+  simpl; split; red; reflexivity].
+  apply typ_app with (V:=sort); [| |discriminate|discriminate].
+   setoid_replace sort with (lift 1 sort) using relation eq_trm at 2;[
+     apply weakening; trivial|simpl; split; red; reflexivity].
+   
+   setoid_replace (Prod sort prop) with (lift 1 (Prod sort prop)) using relation eq_trm at 2; [
+     apply typ_var; trivial|].
+    simpl; split; red; reflexivity.
+
+  apply typ_conv with (T:=(App (Ref 1) (lift 2 x))); [| |discriminate|discriminate].
+   setoid_replace (App (Ref 1) (lift 2 x)) with (lift 1 (App (Ref 0) (lift 1 x))) using relation eq_trm.
+    apply typ_var; trivial.
+   
+    unfold lift. rewrite red_lift_app. fold (lift 2 x). fold (lift 1 x). fold (lift 1 (lift 1 x)).
+    rewrite split_lift. rewrite eq_trm_lift_ref_fv; [reflexivity|omega].
+
+   apply eq_typ_app; [reflexivity|].
+   do 2 red; intros.
+   assert (val_ok e (V.shift 2 i) (I.shift 2 j)).
+    unfold val_ok in H |- *; intros.
+     assert (nth_error (App (Ref 0) (lift 1 x) :: Prod sort prop :: e) (S (S n)) = value T) by trivial.
+     specialize H with (1:=H1). unfold in_int in H |- *. split; [discriminate|].
+      destruct H as (_, H). destruct T; do 2 red in H |- *.
+       revert H; apply real_morph.
+        unfold V.shift; simpl; reflexivity.
+        
+        do 2 rewrite split_lift with (n:= S _); rewrite split_lift with (n:= n).
+        do 4 rewrite int_lift_eq. rewrite V.shift_split with (n:=1); reflexivity.
+
+        unfold I.shift; trivial.
+        
+       red in H |- *. destruct H.
+       split.
+        do 2 rewrite kind_ok_lift with (k:=0).
+        do 2 rewrite eq_trm_lift_ref_fv by omega.
+        apply H. apply H2.
+
+   apply Ht in H0. red in H0. do 2 rewrite split_lift with (n:=1).
+   do 4 rewrite int_lift_eq.
+   rewrite V.shift_split with (n:=1) in H0; trivial.
+Qed.
+    
+
+ 
