@@ -15,7 +15,11 @@ Import SNP.
 Import Esub SN_CC_Real.
 Import ZF SN CCSN. 
 Import PresburgerTheory PresburgerSem IntpPresburger.
-Import List SN_NAT GenLemmas ZFind_nat.
+Import List SN_NAT GenLemmas ZFind_nat SATnat.
+
+
+
+
 
 Lemma prf_irr_set : forall e P, typ e P prop ->
   (forall i j t, val_ok e i j -> t ∈ El (int i P) -> t == empty).
@@ -29,11 +33,18 @@ Qed.
 Inductive valid_ctxt : (list trm -> Prop) :=
 | vcnil : valid_ctxt nil
 | vcconsN : forall l, valid_ctxt l -> valid_ctxt (Nat::l)
-| vcconsP : forall l t x y, valid_ctxt l -> typ l x Nat ->
-  typ l y Nat -> typ l t (EQ_trm x y) -> valid_ctxt ((EQ_trm x y)::l).
+| vcconsP : forall l t x y, 
+  valid_ctxt l -> typ l x Nat -> typ l y Nat -> 
+  (exists i j, val_ok l i j /\ [int i t, tm j t] \real int i (EQ_trm x y)) -> 
+  valid_ctxt ((EQ_trm x y)::l).
+
+
 
 
 Lemma valid_ctxt_wf_clsd : forall e, valid_ctxt e -> wf_clsd_env e.
+induction 1. Focus 3.
+
+
 unfold wf_clsd_env; induction 1 as [|l HE IH|l t x y HE IH Hx Hy]; intros i j Hok.
  exists (fun _ => Lc.Abs (Lc.Ref 0)). split; [red; intros n T Hn|intros _].
   destruct n; simpl in Hn; discriminate.
@@ -75,6 +86,11 @@ unfold wf_clsd_env; induction 1 as [|l HE IH|l t x y HE IH Hx Hy]; intros i j Ho
 
   intro n; destruct n; simpl; trivial.
 
+ unfold val_ok in Hok.
+ assert (nth_error (EQ_trm x y :: l) 0 = value (EQ_trm x y)) as HEQ0 by trivial.
+ apply Hok in HEQ0. unfold in_int in HEQ0. destruct HEQ0 as (_, HEQ0).
+ hnf in HEQ0. rewrite int_lift_eq in HEQ0.
+
  assert (val_ok l (V.shift 1 i) (I.shift 1 j)).
   unfold val_ok in Hok |- *; intros.
   specialize Hok with (n:=S n) (T:=T) (1:=H0).
@@ -97,19 +113,13 @@ unfold wf_clsd_env; induction 1 as [|l HE IH|l t x y HE IH Hx Hy]; intros i j Ho
  apply (prf_irr_set _ _ HEQ _ _ _ H0) in Hi0. clear H1.
  
  destruct IH as (j', (Hval, Hclsd)).
- apply red_typ with (1:=Hval) in H; [|discriminate].
- destruct H as (_, Ht).
- exists (I.cons (tm j' t) j'). split.
-  apply vcons_add_var with (x:= int (V.shift 1 i) t) (t:=tm j' t) (T:=EQ_trm x y) 
-    in Hval; [|trivial|discriminate].
-   destruct Ht as (Ht, _). unfold inX in Ht.
-   apply (prf_irr_set _ _ HEQ _ _ _ H0) in Ht.
-   unfold val_ok in Hval |- *; intros.
-   apply Hval in H. revert H; apply in_int_morph; [|reflexivity|reflexivity|reflexivity].
-   rewrite V.cons_ext with (i':=i); [|rewrite Hi0, Ht|]; reflexivity.
+ exists (I.cons (j 0) j'). split.
+  unfold val_ok. intros. rewrite <- V.cons_ext with (x:=i 0) (i:=V.shift 1 i) by reflexivity.
+  revert n T H1; fold (val_ok (EQ_trm x y::l) (V.cons (i 0) (V.shift 1 i)) (I.cons (j 0) j')).
+  apply vcons_add_var; [trivial|trivial|discriminate].
 
    intro n. destruct n; simpl; [|apply Hclsd].
-   unfold closed_pure_trm in Hclsd |- *. intro k. intro H.
+   unfold closed_pure_trm in Hclsd |- *. intro k. intro H'.
    apply tm_closed in H. apply H. intro n. apply Hclsd.
 Qed.  
 
@@ -123,8 +133,7 @@ Lemma SN_P : forall e x y,
   eq_typ e x y.
 Proof. apply SN_T. Qed.
 
-Definition EQ_refl x := 
-  Abs (Prod sort prop) (Abs (App (Ref 0) (lift 1 x)) (Ref 0)).
+
 
 Lemma EQ_refl_prf : forall e x y t, 
   valid_ctxt e ->
@@ -180,6 +189,5 @@ apply typ_abs; [| |discriminate].
    do 4 rewrite int_lift_eq.
    rewrite V.shift_split with (n:=1) in H0; trivial.
 Qed.
-    
 
  

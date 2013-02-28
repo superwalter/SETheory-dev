@@ -15,6 +15,7 @@ Import Esub GenLemmas.
 Import SN_CC_Real.
 Import ZF SN CCSN.
 
+
 (*SN for the abstract theory*)
 Module Abs_SN_Theory (Msyn : TheorySyn) (Msem : TheorySem) (Mintp : TheoryIntp Msyn Msem).
 

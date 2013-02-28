@@ -8,7 +8,6 @@ Require Import Omega.
 (******************************************************************************************)
 
 
-
 (******************************************************************************************)
 (*This model describes the abstract signature of the theory,*)
 (*and defines some operations on the signature*)

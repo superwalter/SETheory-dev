@@ -29,6 +29,10 @@ Axiom sort_clsd :
 Definition wf_clsd_env e := forall i j, val_ok e i j ->
   exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)).
 
+Axiom PredVary : forall e x, typ e x sort ->
+  exists P, typ e P (Prod sort prop) /\ eq_typ e (App P x) (Prod prop (Prod (Ref 0) (Ref 1))) /\
+    (forall y, typ e y sort -> eq_typ e (App P y) (Prod prop (Ref 0))).
+
 Axiom PredVary : forall e x y i j, 
   wf_clsd_env e ->
   typ e x sort ->
