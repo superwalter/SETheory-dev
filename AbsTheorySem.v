@@ -33,17 +33,6 @@ Axiom PredVary : forall e x, typ e x sort ->
   exists P, typ e P (Prod sort prop) /\ eq_typ e (App P x) (Prod prop (Prod (Ref 0) (Ref 1))) /\
     (forall y, typ e y sort -> eq_typ e (App P y) (Prod prop (Ref 0))).
 
-Axiom PredVary : forall e x y i j, 
-  wf_clsd_env e ->
-  typ e x sort ->
-  typ e y sort ->
-  val_ok e i j ->
-  (exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)) /\
-    (exists P, P <> kind /\ [int i P, tm j' P] \real int i (Prod sort prop) /\ 
-      exists u, [int i u, tm j' u] \real (app (int i P) (int i x)) /\
-        ((exists v, [int i v, tm j' v] \real (app (int i P) (int i y))) -> 
-          int i x == int i y))).
-
 End AbsSemSig.
 
 (************************************************************************************)
@@ -63,6 +52,19 @@ Lemma EQ_trm_elim : forall e x y t,
   typ e t (EQ_trm x y) ->
   eq_typ e x y.
 do 2 red; intros e x y t Hclsd Hx Hy Ht i j' Hok'.
+
+
+
+
+
+
+
+
+
+
+
+
+
 generalize PredVary; intro HP. specialize HP with (1:=Hclsd) (2:=Hx) (3:=Hy) (4:=Hok').
 destruct HP as (j, (Hok, (_, HP))).
 destruct HP as (P, HP).
