@@ -10,6 +10,7 @@ Require Import Esub.
 Import GenLemmas.
 Import SN_CC_Real.
 Import ZF SN CCSN.
+Import Sat.
 
 
 
@@ -30,8 +31,15 @@ Definition wf_clsd_env e := forall i j, val_ok e i j ->
   exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)).
 
 Axiom PredVary : forall e x, typ e x sort ->
-  exists P, typ e P (Prod sort prop) /\ eq_typ e (App P x) (Prod prop (Prod (Ref 0) (Ref 1))) /\
+  exists P, typ e P (Prod sort prop) /\ 
+    eq_typ e (App P x) (Prod prop (Prod (Ref 0) (Ref 1))) /\
     (forall y, typ e y sort -> eq_typ e (App P y) (Prod prop (Ref 0))).
+
+Axiom SetPredVary : forall x i, x ∈ El (int i sort) ->
+  exists P, P ∈ prod (int i sort) (fun _ => props) /\
+    app P x == prod props (fun P => prod P (fun p => p)) /\
+    (forall y, y ∈ El (int i sort) /\ ~ x == y ->
+      app P y == prod props (fun P => P)).
 
 End AbsSemSig.
 
@@ -42,9 +50,11 @@ Module SemLogic (M : AbsSemSig).
 
 Export M.
 
+(*Equation is encoded impredicatively*)
+
 Definition EQ_trm x y :=
   Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
-
+ 
 Lemma EQ_trm_elim : forall e x y t,
   wf_clsd_env e ->
   typ e x sort ->
@@ -52,39 +62,120 @@ Lemma EQ_trm_elim : forall e x y t,
   typ e t (EQ_trm x y) ->
   eq_typ e x y.
 do 2 red; intros e x y t Hclsd Hx Hy Ht i j' Hok'.
-
-
-
-
-
-
-
-
-
-
-
-
-
-generalize PredVary; intro HP. specialize HP with (1:=Hclsd) (2:=Hx) (3:=Hy) (4:=Hok').
-destruct HP as (j, (Hok, (_, HP))).
-destruct HP as (P, HP).
-destruct HP as (HSP, HP).
-destruct HP as (HP, Hxy).
-destruct Hxy as (u, (Hv, Hxy)).
+(*Get a closed env*)
+apply Hclsd in Hok'; clear Hclsd j'. destruct Hok' as (j, (Hok, Hclsd)).
+(*Degenerate model term level to set level*)
+apply red_typ with (1:=Hok) in Hx; [|apply sort_not_kind].
+destruct Hx as (_, (Hx, _)). unfold inX in Hx.
+apply red_typ with (1:=Hok) in Hy; [|apply sort_not_kind].
+destruct Hy as (_, (Hy, _)). unfold inX in Hy.
 apply red_typ with (1:=Hok) in Ht; [|discriminate].
 destruct Ht as (_, Ht).
+destruct SetPredVary with (1:=Hx) as (P, HP).
+destruct HP as (HPin, (HPT, HyF)).
+specialize HyF with (int i y).
+cut (int i x == int i y). trivial.
 
-apply Hxy; clear Hxy Hclsd e Hx Hy j' Hok' Hok.
-unfold EQ_trm in Ht. simpl int in Ht.
-apply SN.prod_elim with (x:=int i P) (u:=tm j P) in Ht; [
-  |do 2 red; intros; apply prod_ext; [|do 2 red; intros; rewrite H2]; rewrite H0; reflexivity|trivial].
-apply SN.prod_elim with (x:=int i u) (u:=tm j u) in Ht.
- exists (App (App t P) u). revert Ht; apply real_morph; simpl; [reflexivity| |reflexivity].
-  rewrite split_lift. do 2 rewrite int_cons_lift_eq; reflexivity.
 
- do 2 red; intros. rewrite H0. reflexivity.
 
- revert Hv; apply real_morph; [|rewrite int_cons_lift_eq|]; reflexivity.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*Get True and False*)
+specialize PredVary with (1:=Hx); intro HPT.
+destruct HPT as (P, (HP, (HPT, HPF))). specialize HPF with (1:=Hy).
+(*P is not kind*)
+generalize HP; intros HSP. 
+apply red_typ with (1:=Hok) in HSP; [destruct HSP as (HSP, _)|discriminate].
+(*simplify EQ_trm with a Predicate P*)
+apply typ_app with (1:=HP) in Ht; [|discriminate|discriminate].
+(*Simplify subst*)
+unfold subst in Ht. rewrite red_sigma_prod in Ht. do 2 rewrite red_sigma_app in Ht.
+rewrite red_sigma_var_eq in Ht by trivial.
+rewrite red_sigma_var_eq in Ht by trivial.
+rewrite subst_lift_lt in Ht by omega.
+rewrite subst_lift_lt in Ht by omega.
+do 2 rewrite lift0 in Ht.
+unfold lift in Ht. rewrite <- red_lift_app in Ht. fold (lift 1 (App P y)) in Ht.
+(*Conversion to T and F*)
+assert (eq_typ e (Prod (App P x) (lift 1 (App P y))) (Prod True_symb (lift 1 False_symb))).
+ apply eq_typ_prod; [apply HPT; clear HPT| |discriminate].
+ apply eq_typ_weakening; apply HPF.
+  
+apply typ_conv with (T':=Prod True_symb (lift 1 (False_symb))) in Ht; 
+  [clear Hx Hy HP HPT HPF HSP H|apply H|discriminate|discriminate].
+ generalize True_symb_intro; intro HT.
+ destruct HT with (e:=e) as (p, Hp); clear HT.
+ apply typ_app with (1:=Hp) in Ht; [|discriminate|discriminate].
+ unfold subst in Ht; rewrite subst_lift_lt in Ht by omega.
+ rewrite lift0 in Ht; clear Hp.
+ apply red_typ with (1:=Hok) in Ht; [|discriminate].
+ destruct Ht as (_, (Hint, Htm)).
+ set (prf:=(tm j (App (App t P) p))) in Htm.
+ assert (forall S, inSAT (Lc.App prf (Lc.Abs (Lc.Ref 0))) S).
+  intros S.
+  assert ([mkProp S, Lc.Abs (Lc.Ref 0)] \real props).
+   assert (mkProp S ∈ El props).
+    rewrite El_props_def.
+    exists S; reflexivity.
+    
+   split; [|rewrite Real_sort; [apply Lc.sn_abs|]]; trivial.
+
+ assert (H0:=@SN.prod_elim 
+   props (int i (App (App t P) p)) (mkProp S) (fun P => P) prf (Lc.Abs (Lc.Ref 0))).
+ destruct H0; [red|split| |]; trivial.
+ rewrite Real_mkProp in H1; trivial.
+  unfold inX in H0. rewrite El_mkProp in H0.
+  apply singl_elim in H0; trivial.
+  
+ destruct (neutral_not_closed _ H) as (n, HF).
+ clear e Hint Htm Hok H.
+ inversion_clear HF.
+  apply tm_closed in H. elim H. intro m.
+  specialize Hclsd with (n:=m). apply Hclsd.
+ 
+  inversion_clear H.  inversion_clear H0.
+Qed.
+
+Lemma EQ_trm_typ : forall x y e, 
+  typ e x sort ->
+  typ e y sort ->
+  typ e (EQ_trm x y) prop.
+intros; apply typ_prod; [right; trivial|left|].
+ apply typ_prod; [left; trivial|left; apply typ_sort|apply typ_prop].
+
+ apply typ_prod; [right; trivial|right|].
+  setoid_replace prop with (subst (lift 1 x) prop) using relation eq_trm at 2;
+    [|simpl; split; red; reflexivity].
+  apply typ_app with (V:=(lift 1 sort)); 
+    [apply weakening; trivial| | |discriminate].
+   setoid_replace (Prod (lift 1 sort) prop) with (lift 1 (Prod sort prop)) using relation eq_trm;
+     [apply typ_var; trivial
+       |unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity].
+
+   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
+  
+  setoid_replace prop with (subst (lift 2 y) prop) using relation eq_trm at 2;
+    [|simpl; split; red; reflexivity].
+  apply typ_app with (V:=(lift 2 sort)); 
+    [do 2 rewrite split_lift with (n:=1); do 2 apply weakening; trivial| | |discriminate].
+   setoid_replace (Prod (lift 2 sort) prop) with (lift 2 (Prod sort prop)) using relation eq_trm;
+     [apply typ_var; trivial|].
+    unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity.
+
+   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
 Qed.
 
 (*False_symb for BF*)
@@ -697,36 +788,6 @@ assert (eq_trm (Prod (Prod sort (Prod A (lift 2 C))) (lift 1 C))
 
 rewrite H; clear H.
 apply typ_app with (V:=prop); [| |discriminate|discriminate]; trivial.
-Qed.
-
-(*Equation is encoded impredicatively*)
-Lemma EQ_trm_typ : forall x y e, 
-  typ e x sort ->
-  typ e y sort ->
-  typ e (EQ_trm x y) prop.
-intros; apply typ_prod; [right; trivial|left|].
- apply typ_prod; [left; trivial|left; apply typ_sort|apply typ_prop].
-
- apply typ_prod; [right; trivial|right|].
-  setoid_replace prop with (subst (lift 1 x) prop) using relation eq_trm at 2;
-    [|simpl; split; red; reflexivity].
-  apply typ_app with (V:=(lift 1 sort)); 
-    [apply weakening; trivial| | |discriminate].
-   setoid_replace (Prod (lift 1 sort) prop) with (lift 1 (Prod sort prop)) using relation eq_trm;
-     [apply typ_var; trivial
-       |unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity].
-
-   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
-  
-  setoid_replace prop with (subst (lift 2 y) prop) using relation eq_trm at 2;
-    [|simpl; split; red; reflexivity].
-  apply typ_app with (V:=(lift 2 sort)); 
-    [do 2 rewrite split_lift with (n:=1); do 2 apply weakening; trivial| | |discriminate].
-   setoid_replace (Prod (lift 2 sort) prop) with (lift 2 (Prod sort prop)) using relation eq_trm;
-     [apply typ_var; trivial|].
-    unfold lift; rewrite red_lift_prod; apply Prod_morph; [|simpl; split; red]; reflexivity.
-
-   case_eq sort; intros H1; [discriminate|apply sort_not_kind in H1; contradiction].
 Qed.
 
 End SemLogic.

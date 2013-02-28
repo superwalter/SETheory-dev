@@ -265,6 +265,26 @@ destruct D; rewrite tm_lift_rec_eq;
   [red; do 2 rewrite int_lift_rec_eq|do 2 red; rewrite <- kind_ok_lift]; trivial.
 Qed.
 
+Lemma eq_typ_weakening : forall e A M N, 
+  eq_typ e M N -> eq_typ (A::e) (lift 1 M) (lift 1 N).
+do 2 red; intros e A M T H i j Hok.
+assert (val_ok e (V.shift 1 i) (I.shift 1 j)) as Hok'.
+ unfold val_ok in Hok |- *; intros.
+ unfold V.shift, I.shift; simpl.
+ apply Hok with (n:=S n) in H0. unfold in_int in H0 |- *.
+ destruct H0 as (_, H0). split; [discriminate|].
+ destruct T0; do 2 red in H0 |- *.
+  revert H0. apply real_morph; simpl; reflexivity.
+
+  red in H0 |- *. destruct H0.
+  split; [|simpl; apply H1].
+   rewrite kind_ok_lift with (k:=0).
+   rewrite eq_trm_lift_ref_fv; [apply H0|omega].
+
+apply H in Hok'. do 2 red in Hok'.
+unfold lift; do 2 rewrite int_lift_rec_eq. rewrite V.lams0. trivial.
+Qed.
+
 
 (***************************************************************************************)
 (*This following definition should be in Lambda.v*)

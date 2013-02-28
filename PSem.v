@@ -410,7 +410,6 @@ apply prod_intro_sn.
    apply SN.prod_elim with (x:=x1) (u:=u0) in HS; [|do 2 red; reflexivity|]; trivial.
 Qed.
 
-
 Lemma PredVary : forall e x y i j, 
   wf_clsd_env e ->
   typ e x sort ->
