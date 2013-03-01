@@ -30,15 +30,21 @@ Axiom sort_clsd :
 Definition wf_clsd_env e := forall i j, val_ok e i j ->
   exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)).
 
+Axiom sort_dec : forall x y i, 
+  int i x ∈ El (int i sort) ->
+  int i y ∈ El (int i sort) ->
+  (int i x == int i y) \/ (~ int i x == int i y).
+
 Axiom PredVary : forall e x, typ e x sort ->
   exists P, typ e P (Prod sort prop) /\ 
     eq_typ e (App P x) (Prod prop (Prod (Ref 0) (Ref 1))) /\
     (forall y, typ e y sort -> eq_typ e (App P y) (Prod prop (Ref 0))).
 
 Axiom SetPredVary : forall x i, x ∈ El (int i sort) ->
-  exists P, P ∈ prod (int i sort) (fun _ => props) /\
-    app P x == prod props (fun P => prod P (fun p => p)) /\
-    (forall y, y ∈ El (int i sort) /\ ~ x == y ->
+  exists P, P ∈ El (prod (int i sort) (fun _ => props)) /\
+    app P x == prod props (fun P => prod P (fun _ => P)) /\
+    (forall y, y ∈ El (int i sort) ->
+      ~ x == y ->
       app P y == prod props (fun P => P)).
 
 End AbsSemSig.
@@ -50,8 +56,53 @@ Module SemLogic (M : AbsSemSig).
 
 Export M.
 
-(*Equation is encoded impredicatively*)
+(*False_symb for BF*)
+Definition False_symb := Prod prop (Ref 0).
 
+Lemma False_symb_typ : forall e, typ e False_symb prop.
+intros; apply typ_prod; [right; trivial|left; apply typ_prop|].
+ setoid_replace prop with (lift 1 prop) using relation eq_trm at 2;
+   [apply typ_var; trivial|simpl; split; red; reflexivity].
+Qed.
+
+Lemma False_symb_elim : forall e t P,
+  typ e t False_symb ->
+  typ e P prop ->
+  typ e (App t P) P.
+red; intros e t P Ht HP i j Hok.
+generalize HP; intros HSP.
+apply red_typ with (1:=Hok) in HSP; [destruct HSP as (HSP, _)|discriminate].
+revert i j Hok; fold (typ e (App t P) P).
+setoid_replace P with (subst P (Ref 0)) using relation eq_trm at 2;
+  [|unfold subst; rewrite red_sigma_var_eq; [rewrite lift0; reflexivity|trivial]].
+apply typ_app with (V:=prop); [| |discriminate|discriminate]; trivial. 
+Qed.
+
+(*True_symb for TF*)
+Definition True_symb := Prod prop (Prod (Ref 0) (Ref 1)).
+
+Lemma True_symb_typ : forall e, typ e True_symb prop.
+intro e.
+apply typ_prod; [right; trivial|left; apply typ_prop|].
+apply typ_prod; [right; trivial|right|].
+ setoid_replace prop with (lift 1 prop) using relation eq_trm at 2;
+   [apply typ_var; trivial|simpl; split; red; reflexivity].
+
+ setoid_replace prop with (lift 2 prop) using relation eq_trm at 2;
+   [apply typ_var; trivial|simpl; split; red; reflexivity].
+Qed.
+
+Lemma True_symb_intro : forall e, exists t, typ e t True_symb.
+exists (Abs prop (Abs (Ref 0) (Ref 0))).
+apply typ_abs; [left; apply typ_prop| |discriminate].
+apply typ_abs; [right| |discriminate].
+ setoid_replace prop with (lift 1 prop) using relation eq_trm at 2;
+   [apply typ_var; trivial|simpl; split; red; reflexivity].
+
+ rewrite <- (eq_trm_lift_ref_fv 1 0 0); [apply typ_var; trivial|omega].
+Qed.
+
+(*Equation is encoded impredicatively*)
 Definition EQ_trm x y :=
   Prod (Prod sort prop) (Prod (App (Ref 0) (lift 1 x)) (App (Ref 1) (lift 2 y))).
  
@@ -61,6 +112,7 @@ Lemma EQ_trm_elim : forall e x y t,
   typ e y sort ->
   typ e t (EQ_trm x y) ->
   eq_typ e x y.
+(*Pre-process*)
 do 2 red; intros e x y t Hclsd Hx Hy Ht i j' Hok'.
 (*Get a closed env*)
 apply Hclsd in Hok'; clear Hclsd j'. destruct Hok' as (j, (Hok, Hclsd)).
@@ -71,82 +123,90 @@ apply red_typ with (1:=Hok) in Hy; [|apply sort_not_kind].
 destruct Hy as (_, (Hy, _)). unfold inX in Hy.
 apply red_typ with (1:=Hok) in Ht; [|discriminate].
 destruct Ht as (_, Ht).
+(*See whether x == y*)
+destruct sort_dec with (1:=Hx) (2:=Hy) as [HT|HF]; [apply HT|].
+(*If x == y, then contradiction*)
+(*First, Sepecialize EQ_trm with a P*)
 destruct SetPredVary with (1:=Hx) as (P, HP).
-destruct HP as (HPin, (HPT, HyF)).
-specialize HyF with (int i y).
-cut (int i x == int i y). trivial.
+destruct HP as (HPin, (HPT, HPF)).
+specialize HPF with (1:=Hy) (2:=HF). clear HF.
+unfold EQ_trm in Ht. simpl int in Ht.
+assert (prod (prod (int i sort) (fun _ => props))
+  (fun P => prod (app P (int (V.cons P i) (lift 1 x)))
+  (fun x : X => app P (int (V.cons x (V.cons P i)) (lift 2 y)))) ==
+  prod (prod (int i sort) (fun _ => props))
+  (fun P => prod (app P (int i x))
+  (fun x : X => app P (int i y)))).
+apply prod_ext; [reflexivity|do 2 red; intros]. 
+ apply prod_ext.
+  rewrite int_cons_lift_eq.
+  rewrite H0; reflexivity.
 
+  do 2 red; intros. 
+  rewrite split_lift. do 2 rewrite int_cons_lift_eq.
+  rewrite H0; reflexivity.
+rewrite H in Ht; clear H.
 
+assert ([P, Lc.Abs (Lc.Ref 0)] \real prod (int i sort) (fun _ => props)).
+ split; [apply HPin|].
+  rewrite Real_prod; [|do 2 red; reflexivity|apply HPin].
+   apply piSAT_intro; [apply Lc.sn_abs; apply Lc.sn_var|intros].
+    assert (app P x0 ∈ El props).
+     unfold inX in H. change (El props) with (El ((fun _ => props) x0)).
+     apply prod_elim with (2:=HPin)(3:=H).
+      do 2 red; reflexivity.
 
+    rewrite Real_sort; [|apply H1].
+    apply sat_sn in H0.
+    apply inSAT_exp; [right; apply H0|].
+     apply snSAT_intro. 
+     unfold Lc.subst; simpl; rewrite Lc.lift0. apply H0.
 
+apply SN.prod_elim with (3:=H) in Ht; [clear H|do 2 red; intros y1 y2 H0 H1; 
+  apply prod_ext; [|do 2 red; intros]; rewrite H1; reflexivity].
 
+(*Sepecialize EQ_trm with a proof of True*)
+assert (prod (app P (int i x)) (fun _  => app P (int i y)) ==
+  prod (prod props (fun P : set => prod P (fun _ : set => P))) (fun _ => 
+    prod props (fun P : set => P))).
+ apply prod_ext; [apply HPT|do 2 red; intros; apply HPF].
 
-
-
-
-
-
-
-
-
-
-
-
-
-(*Get True and False*)
-specialize PredVary with (1:=Hx); intro HPT.
-destruct HPT as (P, (HP, (HPT, HPF))). specialize HPF with (1:=Hy).
-(*P is not kind*)
-generalize HP; intros HSP. 
-apply red_typ with (1:=Hok) in HSP; [destruct HSP as (HSP, _)|discriminate].
-(*simplify EQ_trm with a Predicate P*)
-apply typ_app with (1:=HP) in Ht; [|discriminate|discriminate].
-(*Simplify subst*)
-unfold subst in Ht. rewrite red_sigma_prod in Ht. do 2 rewrite red_sigma_app in Ht.
-rewrite red_sigma_var_eq in Ht by trivial.
-rewrite red_sigma_var_eq in Ht by trivial.
-rewrite subst_lift_lt in Ht by omega.
-rewrite subst_lift_lt in Ht by omega.
-do 2 rewrite lift0 in Ht.
-unfold lift in Ht. rewrite <- red_lift_app in Ht. fold (lift 1 (App P y)) in Ht.
-(*Conversion to T and F*)
-assert (eq_typ e (Prod (App P x) (lift 1 (App P y))) (Prod True_symb (lift 1 False_symb))).
- apply eq_typ_prod; [apply HPT; clear HPT| |discriminate].
- apply eq_typ_weakening; apply HPF.
-  
-apply typ_conv with (T':=Prod True_symb (lift 1 (False_symb))) in Ht; 
-  [clear Hx Hy HP HPT HPF HSP H|apply H|discriminate|discriminate].
- generalize True_symb_intro; intro HT.
- destruct HT with (e:=e) as (p, Hp); clear HT.
- apply typ_app with (1:=Hp) in Ht; [|discriminate|discriminate].
- unfold subst in Ht; rewrite subst_lift_lt in Ht by omega.
- rewrite lift0 in Ht; clear Hp.
- apply red_typ with (1:=Hok) in Ht; [|discriminate].
- destruct Ht as (_, (Hint, Htm)).
- set (prf:=(tm j (App (App t P) p))) in Htm.
- assert (forall S, inSAT (Lc.App prf (Lc.Abs (Lc.Ref 0))) S).
+rewrite H in Ht; clear H HPT HPF HPin.
+destruct True_symb_intro with (e:=e) as (p, Hp).
+apply red_typ with (1:=Hok) in Hp; [|discriminate].
+destruct Hp as (_, Hp). unfold True_symb in Hp. simpl int in Hp. 
+apply SN.prod_elim with (3:=Hp) in Ht; [clear Hp|do 2 red; reflexivity].
+set (prf:=Lc.App (Lc.App (tm j t) (Lc.Abs (Lc.Ref 0))) (tm j p)) in Ht.
+ assert (forall S, inSAT (Lc.App prf (Lc.Abs (Lc.Ref 0))) S) as HF.
   intros S.
-  assert ([mkProp S, Lc.Abs (Lc.Ref 0)] \real props).
-   assert (mkProp S ∈ El props).
+  assert ([mkProp S, Lc.Abs (Lc.Ref 0)] \real props) as HS.
+   assert (mkProp S ∈ El props) as Htmp.
     rewrite El_props_def.
     exists S; reflexivity.
     
-   split; [|rewrite Real_sort; [apply Lc.sn_abs|]]; trivial.
+   split; [|rewrite Real_sort; [apply Lc.sn_abs; apply Lc.sn_var|]]; apply Htmp.
 
- assert (H0:=@SN.prod_elim 
-   props (int i (App (App t P) p)) (mkProp S) (fun P => P) prf (Lc.Abs (Lc.Ref 0))).
- destruct H0; [red|split| |]; trivial.
- rewrite Real_mkProp in H1; trivial.
-  unfold inX in H0. rewrite El_mkProp in H0.
-  apply singl_elim in H0; trivial.
-  
- destruct (neutral_not_closed _ H) as (n, HF).
- clear e Hint Htm Hok H.
- inversion_clear HF.
-  apply tm_closed in H. elim H. intro m.
-  specialize Hclsd with (n:=m). apply Hclsd.
- 
-  inversion_clear H.  inversion_clear H0.
+ assert (H:=@SN.prod_elim 
+   props (app (app (int i t) P) (int i p)) (mkProp S) (fun P => P) prf (Lc.Abs (Lc.Ref 0))).
+ destruct H as (HFin, HFsat); [red; trivial|apply Ht|apply HS|].
+ rewrite Real_mkProp in HFsat; [apply HFsat|].
+  unfold inX in HFin. rewrite El_mkProp in HFin.
+  apply singl_elim in HFin; trivial.
+
+ destruct (neutral_not_closed _ HF) as (n, HFF).
+ inversion_clear HFF.
+  inversion_clear H.
+   inversion_clear H0.
+    apply tm_closed in H. elim H. intro m.
+    specialize Hclsd with (n:=m). apply Hclsd.
+
+    inversion_clear H.
+     inversion_clear H0.
+      apply tm_closed in H0. elim H0. intro m.
+      specialize Hclsd with (n:=m). apply Hclsd.
+
+   inversion_clear H.
+    inversion_clear H0.
 Qed.
 
 Lemma EQ_trm_typ : forall x y e, 

@@ -237,6 +237,25 @@ destruct P. destruct i. simpl. apply itm_subst0.
 red; intros. reflexivity.
 Defined.
 
+Lemma P3_inset : forall P, 
+  P ∈ El (prod (mkTY NAT cNAT) (fun _ : set => props)) ->
+  P3 P ∈ El (prod (mkTY NAT cNAT) (fun _ : X => props)).
+intros P HP; unfold P3; apply prod_intro.
+ do 2 red; intros. apply NATREC_morph; [reflexivity| |apply H0].
+  do 2 red; intros. rewrite H1; reflexivity.
+
+ do 2 red; reflexivity.
+
+ intros. rewrite El_def in H. change (El props) with ((fun _ => El props) x).
+ apply NATREC_typ; [do 2 red; reflexivity|do 3 red; intros; rewrite H0; reflexivity
+    |trivial| |intros].
+  apply impredicative_prod; [do 2 red |]; trivial.
+  
+  change (El props) with (El ((fun _ => props) k)).
+  apply prod_elim with (2:=HP); [do 2 red; reflexivity|rewrite El_def; apply H0].
+Qed.
+
+
 Lemma P3_real : forall x0 u, 
   [x0, u]\real prod (mkTY NAT cNAT) (fun _ : set => props) ->
   [P3 x0, u]\real prod (mkTY NAT cNAT) (fun _ : X => props).
@@ -410,72 +429,65 @@ apply prod_intro_sn.
    apply SN.prod_elim with (x:=x1) (u:=u0) in HS; [|do 2 red; reflexivity|]; trivial.
 Qed.
 
-Lemma PredVary : forall e x y i j, 
-  wf_clsd_env e ->
-  typ e x sort ->
-  typ e y sort ->
-  val_ok e i j ->
-  (exists j', val_ok e i j' /\ (forall n, closed_pure_trm (j' n)) /\
-    (exists P, P <> kind /\ [int i P, tm j' P] \real int i (Prod sort prop) /\ 
-      exists u, [int i u, tm j' u] \real (app (int i P) (int i x)) /\
-        ((exists v, [int i v, tm j' v] \real (app (int i P) (int i y))) -> 
-          int i x == int i y))).
-intros e x y i j' Hclsd Hx Hy Hok'.
-apply Hclsd in Hok'. clear Hclsd j'.
-destruct Hok' as (j, (Hok, Hclsd)).
-exists j; split; [|split]; trivial.
-apply red_typ with (1:=Hok) in Hx; [|discriminate].
-destruct Hx as (_, (Hx, _)); unfold inX in Hx; simpl in Hx; rewrite El_def in Hx.
-apply red_typ with (1:=Hok) in Hy; [|discriminate].
-destruct Hy as (_, (Hy, _)); unfold inX in Hy; simpl in Hy; rewrite El_def in Hy.
+Lemma sort_dec : forall x y i, 
+  int i x ∈ El (int i sort) ->
+  int i y ∈ El (int i sort) ->
+  (int i x == int i y) \/ (~ int i x == int i y).
+intros x y i Hx Hy. simpl int in Hx, Hy.
+rewrite El_def in Hx, Hy.
+set (int_x := int i x) in Hx |- *.
+set (int_y := int i y) in Hy |- *.
+clearbody int_x int_y. clear x y i.
+revert int_y Hy; pattern int_x; apply NAT_ind; intros; trivial.
+ rewrite <- H0; apply H1; apply Hy.
 
-set (int_x := int i x) in *. clearbody int_x.
-set (int_y := int i y) in *. clearbody int_y.
-clear x y e Hok.
+ pattern int_y; apply NAT_ind; intros; [rewrite <- H0; apply H1|
+   left; reflexivity|right; apply NATf_discr|trivial].
 
-revert int_y Hy. pattern int_x; apply NAT_ind; trivial; intros.
- apply H1 in Hy; clear H1. destruct Hy as (P, (HSP, (HP, (u, (Hu, Hv))))).
- exists P; split; [|split]; trivial.
- exists u; split; rewrite <- H0; trivial.
+ revert H0; pattern int_y; apply NAT_ind; intros; trivial.
+  rewrite <- H1; apply H2; apply H3.
+  
+  right; intro; apply (NATf_discr n). 
+  rewrite H1; reflexivity.
 
- exists P1t. split; [discriminate|split].
-  simpl int; simpl tm. apply P1_real.
+  destruct H2 with (1:=H0) as [Heq|Hneq]; [left; rewrite Heq; reflexivity|
+    right; intro; apply Hneq; apply SUCC_inj; trivial].
+Qed.
 
-  exists prf_T. simpl int; simpl tm.
-  rewrite P1_ZERO. split; [apply Tprf with (i:=i) (j:=j)|].
-  pattern int_y; apply NAT_ind; [intros|reflexivity|intros|trivial].
-   rewrite H0 in H1; apply H1.
-   destruct H2 as (v, Hv); exists v; rewrite H0; trivial.
+Lemma SetPredVary : forall x i, x ∈ El (int i sort) ->
+  exists P, P ∈ El (prod (int i sort) (fun _ => props)) /\
+    app P x == prod props (fun P => prod P (fun _ => P)) /\
+    (forall y, y ∈ El (int i sort) ->
+      ~ x == y ->
+      app P y == prod props (fun P => P)).
+intros x i Hx. simpl int in Hx. rewrite El_def in Hx.
+pattern x; apply NAT_ind; intros; trivial.
+ destruct H1 as (P, (HP, (HPT, HPF))).
+ exists P. split; [apply HP|rewrite H0 in HPT].
+ split; [apply HPT|intros y Hy Hneq; apply HPF; [apply Hy|]].
+  intro HF; apply Hneq; rewrite H0 in HF; apply HF.
 
-   destruct H1 as (v, HF). rewrite P1_SUCC in HF; trivial.
-   apply FprfF in HF; trivial. contradiction.
+ exists P1.
+ split; [destruct P1_real as (Hin, _); apply Hin|split; [apply P1_ZERO|]].
+  intros y Hy; simpl int in Hy; rewrite El_def in Hy.
+  pattern y; apply NAT_ind; [intros m n Hm Hmn H; rewrite Hmn in H; apply H|
+   intro HF; elim HF; reflexivity|intros; apply P1_SUCC; trivial|trivial].
+  
+ destruct H0 as (P, (HP, (HPT, HPF))).
+ exists (P3 P). split; [apply P3_inset; apply HP|].
+ split; [rewrite P3_SUCC; [apply HPT|apply H]|].
+ intros y Hy; simpl int in Hy; rewrite El_def in Hy.
+ pattern y; apply NAT_ind; intros; [| | |apply Hy].
+  rewrite H1 in H2; apply H2; apply H3.
+  
+  unfold P3; rewrite beta_eq; [rewrite NATREC_0; reflexivity| |
+    rewrite El_def; apply ZERO_typ].
+   do 2 red; intros. apply NATREC_morph; [reflexivity| |apply H2].
+    do 2 red; intros. rewrite H3; reflexivity.
 
- pattern int_y; apply NAT_ind; trivial; intros.
-  destruct H3 as (P, (HSP, (HP, (u, (Hu, Hv))))).
-  exists P; split; [|split]; trivial.
-  exists u; split; trivial; intros.
-   rewrite <- H2; apply Hv. destruct H3 as (v, H3); exists v; rewrite H2; trivial.
-
-  exists P2t. split; [discriminate|split].
-   simpl int; simpl tm; apply P2_real; trivial.
-   
-   exists prf_T. simpl int; simpl tm.
-   rewrite P2_SUCC; trivial. 
-   split; [apply Tprf with (i:=i) (j:=j)|].
-   intros. destruct H1 as (v, Hv). rewrite P2_ZERO in Hv.
-   apply FprfF in Hv; [contradiction|trivial].
-
-  specialize H0 with (1:=H1).
-  destruct H0 as (P, (HSP, (HP, (u, (Hu, Hv))))).
-  exists (P3t P). split; [discriminate|split].
-   simpl int; simpl tm. apply P3_real; trivial.
-
-   exists u; split; [simpl int; rewrite P3_SUCC; trivial|].
-    intros. destruct H0 as (v, Hv'). 
-    simpl int in Hv'; rewrite P3_SUCC in Hv'; trivial.
-    assert (n == n0).
-     apply Hv; exists v; trivial.
-    rewrite H0; reflexivity.
+  rewrite P3_SUCC; [|apply H0].
+   apply HPF; [simpl int; rewrite El_def; apply H0|].
+    intro HF. apply H2. rewrite HF. reflexivity.
 Qed.
 
 End PSemSig.
